@@ -1,8 +1,6 @@
 using JLD2, FileIO
 using PumpProbeFitting
 using PumpProbeModels
-using PumpProbePlotting
-using PyPlot
 using Images
 
 data = load("/Users/lackner/Documents/DataSFG/Notebooks/CaAra/export/pp_d+fr_dif.jld2")
@@ -53,7 +51,7 @@ lower.Γ = [6.0, 5.0]
 upper.Γ = [10.0, 8.0]
 
 println("Fitting...")
-@time r = fit(z, m_fit, lower, upper, maxIter=100)
+@time r = fit(z, m, lower, upper, maxIter=100)
 
 printparams(m.parameters, lower, upper, r.m.parameters)
 
@@ -67,5 +65,3 @@ println("RSQUARED: $(rsquared(r))")
 
 dls = trunc.(Int, [20:5:60...] .* yf)
 wns = trunc.(Int, [45, 65, 120, 140, 160] .* xf)
-
-plot(r, m, dls, wns)
