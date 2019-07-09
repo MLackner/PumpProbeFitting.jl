@@ -3,6 +3,16 @@ module PumpProbeFitting
 using PumpProbeModels
 using LsqFit
 using Printf
+using Statistics
+
+export fit,
+       rsquared,
+       rsquared_slices,
+       generate_bounds,
+       fit2data,
+       printparams,
+       pack_parameters!,
+       unpack_parameters
 
 mutable struct PumpProbeFit
     m::PumpProbeModel
@@ -11,7 +21,8 @@ mutable struct PumpProbeFit
 end
 
 function fit(z, m::PumpProbeModel, lower::PumpProbeModels.ParamContainer,
-                                   upper::PumpProbeModels.ParamContainer)
+                                   upper::PumpProbeModels.ParamContainer;
+                                   maxIter::Int=500)
 
     # Wrapper for the cuve_fit function
     function model(F, xt, p)
@@ -37,15 +48,36 @@ function fit(z, m::PumpProbeModel, lower::PumpProbeModels.ParamContainer,
     pl = unpack_parameters(lower)
     pu = unpack_parameters(upper)
 
-    f = curve_fit(model, xt, Z, p0, lower=pl, upper=pu, maxIter=500,
+    f = curve_fit(model, xt, Z, p0, lower=pl, upper=pu, maxIter=maxIter,
                   autodiff=:finiteforward, inplace=true, show_trace=false)
 
-    pack_parameters!(m, f.param)
-    fitparams = m.parameters
+    mfit = deepcopy(m)
+    pack_parameters!(mfit, f.param)
 
-    printparams(start, lower, upper, fitparams)
+    PumpProbeFit(mfit, f, z)
+end
 
-    PumpProbeFit(m, f, z), model(z[:], xt, f.param)
+
+function rsquared(f::PumpProbeFit)
+    yi = fit2data(f)
+    rsquared(yi, f.f.resid)
+end
+
+function rsquared(yi, ei)
+   ybar = mean(yi)
+   SStot = sum((ybar .- yi).^2)
+   SSres = sum(ei.^2)
+   1 - SSres / SStot
+end
+
+function rsquared_slices(r::PumpProbeFit)
+    y = r.m.delaytimes
+    yi = fit2data(r)
+    rs = similar(y)
+    for i = 1:length(y)
+        rs[i] = rsquared(yi[i,:], r.f.resid[i,:])
+    end
+    rs
 end
 
 function printparams(s, l, u, f)
@@ -67,6 +99,17 @@ function printparams(s, l, u, f)
         end
         @printf "________________________________________________\n"
     end
+end
+
+"""
+Takes a `PumpProbeFit` and returns the data
+"""
+function fit2data(r::PumpProbeFit)
+    # The data is calculated backwards by evaluating the PumpProbeModel
+    # and subtracting the residuals incuded in the fit.
+    z = model2data(r.m)
+    resid = reshape(r.f.resid, size(z))
+    z .-= resid
 end
 
 function generate_bounds(m::PumpProbeModel)

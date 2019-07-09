@@ -1,84 +1,71 @@
 using JLD2, FileIO
 using PumpProbeFitting
 using PumpProbeModels
-using Makie, AbstractPlotting
+using PumpProbePlotting
+using PyPlot
+using Images
 
-function plot(m::PumpProbeModel)
-    x = m.wavenumbers
-    y = m.delaytimes
-    z = zeros(length(y), length(x))
-    X, Y, Z = PumpProbeModels.convert1D(x, y, z)
+data = load("/Users/lackner/Documents/DataSFG/Notebooks/CaAra/export/pp_d+fr_dif.jld2")
+x = data["wn3"]
+y = data["dl3"]
+z = data["z3"]
 
-    evaluate!(Z, X, Y, m)
-    z .= reshape(Z, (length(y), length(x))) * -1
+xf = 0.2
+yf = 0.5
 
-    scene = wireframe(y, x, z, color=(:red, 1.0))
-    axis = scene[Axis]
-    axis[:names, :axisnames] = ("Pump Delay (ps)", "Wavenumber (1/cm)", "")
-    axis[:names, :rotation] = (1π,  π/2, π/2)
-    axis[:names, :align] = ((:center, :center), (:center, :center), (:center, :center))
-    axis[:names, :gap] = (10, 10)
-    # scale!(scene, 1, 1, 500)
-    # update_cam!(scene, FRect3D(Vec3f0(0), Vec3f0(1)))
+NX = trunc(Int, length(x) * xf)
+NY = trunc(Int, length(y) * yf)
 
-    return scene
-end
+x = imresize(x, NX)
+y = imresize(y, NY)
+z = imresize(z, NY, NX)
 
-function plot(m::PumpProbeModel, data)
-    scene = plot(m)
-    z = deepcopy(data) .* -1
-    scatter!(scene, m.delaytimes, m.wavenumbers, z, markersize=2, color=(:black, 0.5))
-
-    # scale!(scene, 1, 1, 500)
-    # update_cam!(scene, FRect3D(Vec3f0(0), Vec3f0(1)))
-
-    scene
-end
-
-# data = load("/Users/lackner/Documents/DataSFG/Notebooks/CaAra/export/pp_d+fr_dif.jld2")
-
-# x = data["wn3"]
-# y = data["dl"]
-# z = data["mdiff3[roi...]"]
-
-x = range(2800.0, 3000.0, length=51)
-y = range(-20, 300, length=61)
-z = zeros(length(y), length(x))
-
-X, Y, Z = PumpProbeModels.convert1D(x, y, z)
-
+## START PARAMETERS
 m = PumpProbeModel(x, y, 2, pumpmode=:triangle)
-m.pumpfunction = y -> exp(-(y)^2/200)
-m.parameters.A = [4.9, 5.1]
-m.parameters.Γ = [7.0, 8.0]
-m.parameters.ω = [2860.0, 2935.0]
-m.parameters.τ[1] = [90.0, 200.0]
-m.parameters.σ[1] = [0.0, 0.0]
+m.pumptimes = -19.0:4:9.0
+m.parameters.A = [3.0, 3.0]
+m.parameters.a = [0.1, 0.1]
+m.parameters.ω = [2861.524, 2928.241]
+m.parameters.σ[1] = [15.0, 15.0]
+m.parameters.Δω = [0.0, 20.0]
+m.parameters.t0 = 8.0
+m.parameters.Γ = [9.0, 6.0]
+m.parameters.τ[1] = [110.0, 160.0]
 m.parameters.γ[1] = [0.0, 0.0]
-m.pumptimes = -20.1:19.9
 
-m_data = deepcopy(m)
-# scene = plot(m_data)
+## BOUNDS
+lower, upper = PumpProbeFitting.generate_bounds(m)
+lower.ω = [2860.0, 2927.0]
+upper.ω = [2862.0, 2929.0]
+lower.Δω = [-20.0, -5.0]
+upper.Δω = [20.0, 30.0]
+lower.σ[1] = [5.0, 5.0]
+upper.σ[1] = [60.0, 60.0]
+lower.t0 = 5.0
+upper.t0 = 15.0
+lower.τ[1] = [50.0, 120.0]
+upper.τ[1] = [120.0, 250.0]
+lower.A = [2.0, 2.0]
+upper.A = [5.0, 5.0]
+lower.a = [0.0, 0.0]
+upper.a = [0.5, 0.5]
+lower.Γ = [6.0, 5.0]
+upper.Γ = [10.0, 8.0]
 
-evaluate!(Z, X, Y, m_data)
-z .= reshape(Z, (length(y), length(x)))
-z .+= (rand(size(z)...) .- 0.5) ./ 50
+println("Fitting...")
+@time r = fit(z, m_fit, lower, upper, maxIter=100)
 
+printparams(m.parameters, lower, upper, r.m.parameters)
 
-m_fitstart = deepcopy(m)
-m_fitstart.parameters.A = [4.7, 5.0]
-m_fitstart.parameters.ω = [2863.0, 2931.0]
-# plot(m_fitstart)
+if r.f.converged == true
+    @info "Fit Converged"
+else
+    @info "Fit Did Not Converge!"
+end
 
-m_fit = deepcopy(m_fitstart)
+println("RSQUARED: $(rsquared(r))")
 
-lower, upper = PumpProbeFitting.generate_bounds(m_fit)
+dls = trunc.(Int, [20:5:60...] .* yf)
+wns = trunc.(Int, [45, 65, 120, 140, 160] .* xf)
 
-r,g = PumpProbeFitting.fit(z, m_fit, lower, upper)
-
-
-scene = plot(m_fit, z)
-
-scale!(scene, 1, 1, 400)
-update_cam!(scene, FRect3D(Vec3f0(0), Vec3f0(1)))
-scene
+plot(r, m, dls, wns)
