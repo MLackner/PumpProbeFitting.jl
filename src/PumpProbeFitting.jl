@@ -22,7 +22,11 @@ end
 
 function fit(z, m::PumpProbeModel, lower::PumpProbeModels.ParamContainer,
                                    upper::PumpProbeModels.ParamContainer;
-                                   maxIter::Int=500)
+                                   autodiff=:finiteforward,
+                                   maxIter=500,
+                                   inplace=true,
+                                   kwargs...)
+
 
     # Wrapper for the cuve_fit function
     function model(F, xt, p)
@@ -30,7 +34,6 @@ function fit(z, m::PumpProbeModel, lower::PumpProbeModels.ParamContainer,
         x = @view xt[:,1]
         t = @view xt[:,2]
         evaluate!(F, x, t, m)
-        F
     end
 
     # convert wavenumber and delaytime inputs to 1D
@@ -48,8 +51,8 @@ function fit(z, m::PumpProbeModel, lower::PumpProbeModels.ParamContainer,
     pl = unpack_parameters(lower)
     pu = unpack_parameters(upper)
 
-    f = curve_fit(model, xt, Z, p0, lower=pl, upper=pu, maxIter=maxIter,
-                  autodiff=:finiteforward, inplace=true, show_trace=false)
+    f = curve_fit(model, xt, Z, p0; lower=pl, upper=pu, maxIter=maxIter,
+                  autodiff=autodiff, inplace=true, kwargs...)
 
     mfit = deepcopy(m)
     pack_parameters!(mfit, f.param)

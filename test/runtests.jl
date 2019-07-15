@@ -22,7 +22,7 @@ z = imresize(z, NY, NX)
 m = PumpProbeModel(x, y, 2, pumpmode=:triangle)
 m.pumptimes = -19.0:4:9.0
 m.parameters.A = [3.0, 3.0]
-m.parameters.a = [0.1, 0.1]
+m.parameters.a = [10.0, 10.0]
 m.parameters.ω = [2861.524, 2928.241]
 m.parameters.σ[1] = [15.0, 15.0]
 m.parameters.Δω = [0.0, 20.0]
@@ -46,12 +46,13 @@ upper.τ[1] = [120.0, 250.0]
 lower.A = [2.0, 2.0]
 upper.A = [5.0, 5.0]
 lower.a = [0.0, 0.0]
-upper.a = [0.5, 0.5]
+upper.a = [50.0, 50.0]
 lower.Γ = [6.0, 5.0]
 upper.Γ = [10.0, 8.0]
 
 println("Fitting...")
-@time r = fit(z, m, lower, upper, maxIter=100)
+@time r = fit(z, m, lower, upper, maxIter=200, show_trace=false,
+              inplace=true, lambda_increase=20.0, lambda_decrease=0.5)
 
 printparams(m.parameters, lower, upper, r.m.parameters)
 
